@@ -1,10 +1,11 @@
-import re
+import re, hashlib
 from urllib.parse import urlparse
 from html.parser import HTMLParser
 
 
 visited_urls = set()
-
+visited_content_hashes = set()
+content_length_threshold = 1048576*1024 # 1GB
 
 def scraper(url, resp):
     links = extract_next_links(url, resp)
@@ -35,10 +36,13 @@ def is_valid(url):
     # There are already some conditions that return False.
     try:
         parsed = urlparse(url)
+        
         if parsed.scheme not in set(["http", "https"]):
             return False
+        # Check if URL has already been visited
         if url in visited_urls:
             return False
+        
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
             + r"|png|tiff?|mid|mp2|mp3|mp4"
@@ -48,6 +52,23 @@ def is_valid(url):
             + r"|epub|dll|cnf|tgz|sha1"
             + r"|thmx|mso|arff|rtf|jar|csv"
             + r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower())
+        # Check if page has already been visited (using fingerprinting)
+        if parsed.netloc in visited_content_hashes:
+            return False
+        # Check if URL is dead (status code is 200 and content length is 0)
+        if resp.status == 200 and len(resp.raw_response.content) == 0:
+            return False
+        # Check if page has no content or too much content
+        if len(resp.content) == 0 or len(resp.content) > content_length_threshold:
+            return False
+        # Add visited urls
+        visited_urls.add(parsed.netloc)
+        # Create and add visited content hash
+        content_hash = hashlib.sha1(url.encode())
+        visited_content_hashes.add(content_hash)
+        return True
+        
+        
 
     except TypeError:
         print ("TypeError for ", parsed)
