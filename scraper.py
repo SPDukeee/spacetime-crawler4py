@@ -3,13 +3,13 @@ from urllib.parse import urlparse
 from html.parser import HTMLParser
 
 
-visited_urls = set()
-visited_content_hashes = set()
+visited_urls = set()  # Set to keep track of URLs that have already been visited
+fingerprints = set()  # Set to keep track of page content fingerprints
 content_length_threshold = 1048576*1024 # 1GB
 
-def scraper(url, resp):
+def scraper(url: str, resp: utils.response.Response):
     links = extract_next_links(url, resp)
-    return [link for link in links if is_valid(link)]
+    return [link for link in links if is_valid(link, resp)]
 
 #help class for extract_next_links()
 class LinkExtractor(HTMLParser):
@@ -30,7 +30,7 @@ def extract_next_links(url, resp):
     return parser.links
 
 
-def is_valid(url):
+def is_valid(url, resp):
     # Decide whether to crawl this url or not. 
     # If you decide to crawl it, return True; otherwise return False.
     # There are already some conditions that return False.
@@ -52,6 +52,11 @@ def is_valid(url):
             + r"|epub|dll|cnf|tgz|sha1"
             + r"|thmx|mso|arff|rtf|jar|csv"
             + r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower())
+        
+        # Filter out urls that are not with uci domain
+        return not re.match(r".*\.ics\.uci\.edu|.*\.cs\.uci\.edu|.*\.informatics\.uci\.edu|.*\.stat\.uci\.edu", parsed.hostname)
+    
+        content_hash = hashlib.sha256(resp.raw_response.content).hexdigest()
         # Check if page has already been visited (using fingerprinting)
         if parsed.netloc in visited_content_hashes:
             return False
@@ -63,8 +68,7 @@ def is_valid(url):
             return False
         # Add visited urls
         visited_urls.add(parsed.netloc)
-        # Create and add visited content hash
-        content_hash = hashlib.sha1(url.encode())
+        # Add visited content hash
         visited_content_hashes.add(content_hash)
         return True
         
