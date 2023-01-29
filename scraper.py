@@ -1,33 +1,26 @@
 import re, hashlib
 from urllib.parse import urlparse
-from html.parser import HTMLParser
+from bs4 import BeautifulSoup
 
 
 visited_urls = set()  # Set to keep track of URLs that have already been visited
 fingerprints = set()  # Set to keep track of page content fingerprints
 content_length_threshold = 1048576*1024 # 1GB
 
+
 def scraper(url: str, resp: utils.response.Response):
     links = extract_next_links(url, resp)
     return [link for link in links if is_valid(link, resp)]
 
-#help class for extract_next_links()
-class LinkExtractor(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.links = []
 
-    def handle_starttag(self, tag, attrs):
-        if tag == 'a':
-            for attr in attrs:
-                if attr[0] == 'href':
-                    self.links.append(attr[1])
-
-                    
 def extract_next_links(url, resp):
-    parser = LinkExtractor()
-    parser.feed(resp.content.decode())
-    return parser.links
+    soup = BeautifulSoup(resp.content, 'html.parser')
+    links = []
+    for link in soup.find_all('a'):
+        href = link.get('href')
+        if href:
+            links.append(href)
+    return links
 
 
 def is_valid(url, resp):
@@ -72,8 +65,6 @@ def is_valid(url, resp):
         visited_content_hashes.add(content_hash)
         return True
         
-        
-
     except TypeError:
         print ("TypeError for ", parsed)
         raise
